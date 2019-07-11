@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 
 namespace GraphCliqueCSharp
 {
+    public enum FileFormat : byte { DIMACS, TXT };
+
     public class MaxCliqueGraph // MyGraph
     {
         private BitMatrix data;
@@ -15,12 +17,18 @@ namespace GraphCliqueCSharp
         private int numberEdges;
         private int[] numberNeighbors;
 
-        public MaxCliqueGraph(string graphFile, string fileFormat)
+        public MaxCliqueGraph(string graphFile, FileFormat fileFormat)
         {
-            if (fileFormat.ToUpper() == "DIMACS") //Discrete Mathematics and Theoretical Computer Science
-                LoadDimacsFormatGraph(graphFile);
-            else
-                throw new Exception("Format " + fileFormat + " not supported");
+            switch (fileFormat)
+            {
+                case FileFormat.DIMACS: // Discrete Mathematics and Theoretical Computer Science
+                    LoadDimacsFormatGraph(graphFile);
+                    break;
+                case FileFormat.TXT:
+                    break;
+                default:
+                    throw new Exception("Format " + fileFormat + " not supported");
+            }
         }
 
         private void LoadDimacsFormatGraph(string graphFile)
@@ -279,16 +287,35 @@ namespace GraphCliqueCSharp
                 }
                 this.Dim = n;
             }
+
             public bool GetValue(int row, int col)
             {
                 return data[row][col];
             }
+
             public void SetValue(int row, int col, bool value)
             {
                 data[row][col] = value;
             }
+
             public override string ToString()
             {
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < data.Length; ++i)
+                {
+                    for (int j = 0; j < data[i].Length; ++j)
+                    {
+                        if (data[i][j] == true)
+                            sb.Append("1 ");
+                        else
+                            sb.Append("0 ");
+                    }
+                    sb.Append(Environment.NewLine);
+                }
+
+                return sb.ToString();
+
+                /*
                 string s = "";
                 for (int i = 0; i < data.Length; ++i)
                 {
@@ -302,6 +329,7 @@ namespace GraphCliqueCSharp
                     s += Environment.NewLine;
                 }
                 return s;
+                */
             }
         }
         // -------------------------------------------------------------------
