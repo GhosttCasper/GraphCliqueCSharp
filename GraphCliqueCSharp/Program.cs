@@ -20,9 +20,9 @@ namespace GraphCliqueCSharp
         static void Main(string[] args)
         {
             string graphFile = "..\\..\\DimacsGraph.clq"; //string graphFile = "DimacsGraph.clq";
-            MaxCliqueGraph.ValidateGraphFile(graphFile, "DIMACS");
+            MaxCliqueGraph.ValidateGraphFile(graphFile, FileFormat.DIMACS); //"DIMACS"
 
-            MaxCliqueGraph graph = new MaxCliqueGraph(graphFile, "DIMACS");
+            MaxCliqueGraph graph = new MaxCliqueGraph(graphFile, FileFormat.DIMACS);
 
             graph.ValidateGraph();
             Console.WriteLine(graph.ToString());

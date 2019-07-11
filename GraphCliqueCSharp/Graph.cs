@@ -156,12 +156,25 @@ namespace GraphCliqueCSharp
         /// <summary>
         /// Проверка файла данных графа до создания экземпляра объекта графа
         /// </summary>
-        public static void ValidateGraphFile(string graphFile, string fileFormat)
+        public static void ValidateGraphFile(string graphFile, FileFormat fileFormat)
         {
+            switch (fileFormat)
+            {
+                case FileFormat.DIMACS: // Discrete Mathematics and Theoretical Computer Science
+                    ValidateDimacsGraphFile(graphFile);
+                    break;
+                case FileFormat.TXT:
+                    break;
+                default:
+                    throw new Exception("Format " + fileFormat + " not supported");
+            }
+
+            /*
             if (fileFormat.ToUpper() == "DIMACS")
                 ValidateDimacsGraphFile(graphFile);
             else
                 throw new Exception("Format " + fileFormat + " not supported");
+             */
         }
 
 
