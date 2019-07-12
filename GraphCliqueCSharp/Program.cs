@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -51,7 +52,7 @@ namespace GraphCliqueCSharp
                 Console.WriteLine("Loading graph into memory");
                 Console.WriteLine("Graph loaded and validated\n");
 
-                int maxTime = 25;
+                int maxTime = 50; // В настоящей задаче о максимальной клике maxTime обычно находится в диапазоне от 1000 до 100 000. 
                 int targetCliqueSize = graph.NumberNodes;
 
                 List<int> maxClique = FindMaxClique(graph, maxTime, targetCliqueSize);
@@ -73,12 +74,21 @@ namespace GraphCliqueCSharp
         static List<int> FindMaxClique(MaxCliqueGraph graph, int maxTime, int targetCliqueSize)
         {
             List<int> clique = new List<int>();
-            random = new Random(3);
+            random = new Random(1);
             int time = 0;
-            int  timeBestCliqueFound = 0; //timeBestClique
-            int  timeLastRestart = 0;//timeRestart
+            int timeBestCliqueFound = 0; //timeBestClique
+            int timeLastRestart = 0;//timeRestart
             int nodeToAdd = -1;
             int nodeToDrop = -1;
+
+            int prohibitPeriod = 1;
+            int timeProhibitChanged = 0;
+            int[] lastMoved = new int[graph.NumberNodes];
+            for (int i = 0; i < lastMoved.Length; ++i)
+            {
+                lastMoved[i] = int.MinValue;
+            }
+            Hashtable history = new Hashtable(); //обобщенный объект Dictionary вместо не обобщенного объекта Hashtable
 
             int randomNode = random.Next(0, graph.NumberNodes);
             Console.WriteLine("Adding node " + randomNode);
@@ -101,17 +111,22 @@ namespace GraphCliqueCSharp
 
                 if (possibleAdd.Count > 0)
                 {
-                    nodeToAdd = GetNodeToAdd(graph, possibleAdd);
-                    Console.WriteLine("Adding node " + nodeToAdd);
-                    clique.Add(nodeToAdd);
-                    clique.Sort();
-                    cliqueChanged = true;
-                    if (clique.Count > bestSize)
+                    List<int> allowedAdd = SelectAllowedNodes(possibleAdd, time, prohibitPeriod, lastMoved);
+                    if (allowedAdd.Count > 0)
                     {
-                        bestSize = clique.Count;
-                        bestClique.Clear();
-                        bestClique.AddRange(clique);
-                        timeBestCliqueFound = time;
+                        nodeToAdd = GetNodeToAdd(graph, allowedAdd, possibleAdd);
+                        Console.WriteLine("Adding node " + nodeToAdd);
+                        clique.Add(nodeToAdd);
+                        lastMoved[nodeToAdd] = time;
+                        clique.Sort();
+                        cliqueChanged = true;
+                        if (clique.Count > bestSize)
+                        {
+                            bestSize = clique.Count;
+                            bestClique.Clear();
+                            bestClique.AddRange(clique);
+                            timeBestCliqueFound = time;
+                        }
                     }
                 } // добавление
 
@@ -119,29 +134,67 @@ namespace GraphCliqueCSharp
                 {
                     if (clique.Count > 0)
                     {
-                        nodeToDrop = GetNodeToDrop(graph, clique, oneMissing);
-                        Console.WriteLine("Dropping node " + nodeToDrop);
-                        clique.Remove(nodeToDrop);
-                        clique.Sort();
-                        cliqueChanged = true;
+                        List<int> allowedInClique = SelectAllowedNodes(clique, time, prohibitPeriod, lastMoved);
+                        if (allowedInClique.Count > 0)
+                        {
+                            nodeToDrop = GetNodeToDrop(graph, clique, oneMissing);
+                            Console.WriteLine("Dropping node " + nodeToDrop);
+                            clique.Remove(nodeToDrop);
+                            lastMoved[nodeToDrop] = time;
+                            clique.Sort();
+                            cliqueChanged = true;
+                        }
                     }
                 } // удаление
 
-                int restart = 2 * bestSize;
+                if (cliqueChanged == false)
+                {
+                    if (clique.Count > 0)
+                    {
+                        nodeToDrop = clique[random.Next(0, clique.Count)];
+                        clique.Remove(nodeToDrop);
+                        lastMoved[nodeToDrop] = time;
+                        clique.Sort();
+                        cliqueChanged = true;
+                    }
+                }
+
+                int restart = 100 * bestSize; // 2
                 if (time - timeBestCliqueFound > restart &&
                     time - timeLastRestart > restart)
                 {
                     Console.WriteLine("\nRestarting\n");
                     timeLastRestart = time;
+                    prohibitPeriod = 1;
+                    timeProhibitChanged = time;
+                    history.Clear();
+                    /*
+                     * int seedNode = random.Next(0, graph.NumberNodes);
+                       Console.WriteLine("Adding node " + seedNode);
+                       clique.Add(seedNode);
+                     */
+
+                    int seedNode = -1;
+                    List<int> temp = new List<int>();
+                    for (int i = 0; i < lastMoved.Length; ++i)
+                    {
+                        if (lastMoved[i] == int.MinValue) temp.Add(i);
+                    }
+
+                    if (temp.Count > 0)
+                        seedNode = temp[random.Next(0, temp.Count)];
+                    else
+                        seedNode = random.Next(0, graph.NumberNodes);
+
                     clique.Clear();
-                    int seedNode = random.Next(0, graph.NumberNodes);
-                    Console.WriteLine("Adding node " + seedNode);
                     clique.Add(seedNode);
                 } // перезапуск
 
                 possibleAdd = MakePossibleAdd(graph, clique);
                 oneMissing = MakeOneMissing(graph, clique);
-            } // цикл
+                prohibitPeriod = UpdateProhibitPeriod(graph, clique, bestSize,
+                    history, time, prohibitPeriod, ref timeProhibitChanged);
+            } // основной цикл обработки
 
             return bestClique;
         }
@@ -167,7 +220,7 @@ namespace GraphCliqueCSharp
             return true;
         }
 
-        static int GetNodeToAdd(MaxCliqueGraph graph, List<int> possibleAdd)
+        static int GetNodeToAdd(MaxCliqueGraph graph, List<int> allowedAdd, List<int> possibleAdd)
         {
             if (possibleAdd.Count == 1)
                 return possibleAdd[0];
@@ -271,6 +324,54 @@ namespace GraphCliqueCSharp
             return result;
         }
 
+        static List<int> SelectAllowedNodes(List<int> listOfNodes, int time, int prohibitPeriod, int[] lastMoved)
+        {
+            if (time > lastMoved[currNode] + prohibitPeriod)
+                result.Add(currNode); // разрешен
+            //Узел currNode — один из находящихся в списке possibleAdd.
+            //Логика проверяет, достаточно ли прошло времени с момента последнего использования этого узла,
+            //т. е. закончен ли период запрета.
+            //Если да, узел добавляется в список узлов allowedAdd.
+
+            throw new NotImplementedException();
+        }
+
+        static int UpdateProhibitPeriod(MaxCliqueGraph graph, List<int> clique,
+            int bestSize, Hashtable history, int time, int prohibitPeriod,
+            ref int timeProhibitChanged)
+        {
+            int result = prohibitPeriod;
+            CliqueInfo cliqueInfo = new CliqueInfo(clique, time);
+
+            if (history.Contains(cliqueInfo.GetHashCode()))
+            {
+                CliqueInfo ci = (CliqueInfo) history[cliqueInfo.GetHashCode()];
+              
+                int intervalSinceLastVisit = time - ci.LastSeen;
+                ci.LastSeen = time;
+                if (intervalSinceLastVisit < 2 * graph.NumberNodes - 1)
+                {
+                    timeProhibitChanged = time;
+                    if (prohibitPeriod + 1 < 2 * bestSize) return prohibitPeriod + 1;
+                    else return 2 * bestSize;
+                }
+            }
+            else history.Add(cliqueInfo.GetHashCode(), cliqueInfo);
+
+            if (time - timeProhibitChanged > 10 * bestSize)
+            {
+                timeProhibitChanged = time;
+                if (prohibitPeriod - 1 > 1)
+                    return prohibitPeriod - 1;
+                else
+                    return 1;
+            }
+            else
+            {
+                return result; // нет изменений
+            }
+        } // UpdateProhibitTime
+
         static string ListAsString(List<int> list)
         {
             StringBuilder sb = new StringBuilder();
@@ -280,6 +381,41 @@ namespace GraphCliqueCSharp
             }
 
             return sb.ToString();
+        }
+
+        private class CliqueInfo
+        {
+            private List<int> clique;
+            private int lastSeen;
+            public CliqueInfo(List<int> clique, int lastSeen)
+            {
+                this.clique = new List<int>();
+                this.clique.AddRange(clique);
+                this.lastSeen = lastSeen;
+            }
+            public int LastSeen
+            {
+                get { return this.lastSeen; }
+                set { this.lastSeen = value; }
+            }
+            public override int GetHashCode()
+            {
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < clique.Count; ++i)
+                {
+                    sb.Append(clique[i]);
+                    sb.Append(" ");
+                }
+                string s = sb.ToString();
+                return s.GetHashCode();
+            }
+            public override string ToString()
+            {
+                string s = "";
+                for (int i = 0; i < clique.Count; ++i)
+                    s += clique[i] + " ";
+                return s;
+            }
         }
 
     } // класс Program
