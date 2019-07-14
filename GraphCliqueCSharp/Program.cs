@@ -18,22 +18,6 @@ namespace GraphCliqueCSharp
 {
     class GreedyMaxCliqueProgram
     {
-        /*static void Main(string[] args)
-        {
-            string graphFile = "..\\..\\DimacsGraph.clq"; //string graphFile = "DimacsGraph.clq";
-            MaxCliqueGraph.ValidateGraphFile(graphFile, FileFormat.DIMACS); //"DIMACS"
-
-            MaxCliqueGraph graph = new MaxCliqueGraph(graphFile, FileFormat.DIMACS);
-
-            graph.ValidateGraph();
-            Console.WriteLine(graph.ToString());
-
-            Console.WriteLine("\nAre nodes 5 and 8 adjacent? " +
-                              graph.AreAdjacent(5, 8));
-            Console.WriteLine("Number neighbors of node 4 = " +
-                              graph.NumberNeighbors(4));
-        }*/
-
         static Random random = null;
 
         static void Main(string[] args)
@@ -41,8 +25,9 @@ namespace GraphCliqueCSharp
             try
             {
                 Console.WriteLine("\nBegin greedy maximum clique demo\n");
+                Console.WriteLine("\nBegin tabu algorithm maximum clique demo\n");
 
-                string graphFile = "..\\..\\DimacsGraph.clq";
+                string graphFile = "..\\..\\DimacsGraph.clq"; //string graphFile = "DimacsGraph.clq";
                 MaxCliqueGraph.ValidateGraphFile(graphFile, FileFormat.DIMACS); //"DIMACS"
 
                 MaxCliqueGraph graph = new MaxCliqueGraph(graphFile, FileFormat.DIMACS);
@@ -57,13 +42,19 @@ namespace GraphCliqueCSharp
 
                 List<int> maxClique = FindMaxClique(graph, maxTime, targetCliqueSize);
                 Console.WriteLine("\nMaximum time reached");
-                Console.WriteLine("\nSize of best clique found = " +
-                                  maxClique.Count);
+                Console.WriteLine("\nSize of best clique found = " + maxClique.Count);
 
                 Console.WriteLine("\nBest clique found:");
                 Console.WriteLine(ListAsString(maxClique));
 
                 Console.WriteLine("\nEnd greedy maximum clique demo\n");
+
+                Console.WriteLine(graph.ToString());
+
+                Console.WriteLine("\nAre nodes 5 and 8 adjacent? " +
+                                  graph.AreAdjacent(5, 8));
+                Console.WriteLine("Number neighbors of node 4 = " +
+                                  graph.NumberNeighbors(4));
             }
             catch (Exception ex)
             {
@@ -88,7 +79,7 @@ namespace GraphCliqueCSharp
             {
                 lastMoved[i] = int.MinValue;
             }
-            Hashtable history = new Hashtable(); //обобщенный объект Dictionary вместо не обобщенного объекта Hashtable
+            Dictionary<int, CliqueInfo> history = new Dictionary<int, CliqueInfo>();
 
             int randomNode = random.Next(0, graph.NumberNodes);
             Console.WriteLine("Adding node " + randomNode);
@@ -108,6 +99,7 @@ namespace GraphCliqueCSharp
             {
                 ++time;
                 bool cliqueChanged = false;
+                ValidateClique(clique, possibleAdd, oneMissing);
 
                 if (possibleAdd.Count > 0)
                 {
@@ -147,7 +139,7 @@ namespace GraphCliqueCSharp
                     }
                 } // удаление
 
-                if (cliqueChanged == false)
+                if (cliqueChanged == false) // если невозможно добавить или удалить разрешенный узел
                 {
                     if (clique.Count > 0)
                     {
@@ -159,7 +151,7 @@ namespace GraphCliqueCSharp
                     }
                 }
 
-                int restart = 100 * bestSize; // 2
+                int restart = 2 * bestSize; // 100
                 if (time - timeBestCliqueFound > restart &&
                     time - timeLastRestart > restart)
                 {
@@ -168,11 +160,6 @@ namespace GraphCliqueCSharp
                     prohibitPeriod = 1;
                     timeProhibitChanged = time;
                     history.Clear();
-                    /*
-                     * int seedNode = random.Next(0, graph.NumberNodes);
-                       Console.WriteLine("Adding node " + seedNode);
-                       clique.Add(seedNode);
-                     */
 
                     int seedNode = -1;
                     List<int> temp = new List<int>();
@@ -180,7 +167,6 @@ namespace GraphCliqueCSharp
                     {
                         if (lastMoved[i] == int.MinValue) temp.Add(i);
                     }
-
                     if (temp.Count > 0)
                         seedNode = temp[random.Next(0, temp.Count)];
                     else
@@ -188,10 +174,11 @@ namespace GraphCliqueCSharp
 
                     clique.Clear();
                     clique.Add(seedNode);
+                    Console.WriteLine("Adding node " + seedNode);
                 } // перезапуск
 
-                possibleAdd = MakePossibleAdd(graph, clique);
-                oneMissing = MakeOneMissing(graph, clique);
+                possibleAdd = MakePossibleAdd(graph, clique); // Альтернатива — поддерживать вспомогательные структуры данных 
+                oneMissing = MakeOneMissing(graph, clique); //  и обновлять эти два списка вместо повторного их создания с нуля.
                 prohibitPeriod = UpdateProhibitPeriod(graph, clique, bestSize,
                     history, time, prohibitPeriod, ref timeProhibitChanged);
             } // основной цикл обработки
@@ -222,13 +209,15 @@ namespace GraphCliqueCSharp
 
         static int GetNodeToAdd(MaxCliqueGraph graph, List<int> allowedAdd, List<int> possibleAdd)
         {
-            if (possibleAdd.Count == 1)
-                return possibleAdd[0];
+            if (allowedAdd.Count == 1)
+                return allowedAdd[0];
+
+            List<int> allowedAddDegree = new List<int>(possibleAdd.Count);
 
             int maxDegree = 0;
-            for (int i = 0; i < possibleAdd.Count; ++i)
+            for (int i = 0; i < allowedAdd.Count; ++i)
             {
-                int currNode = possibleAdd[i];
+                int currNode = allowedAdd[i];
                 int degreeOfCurrentNode = 0;
                 for (int j = 0; j < possibleAdd.Count; ++j)
                 {
@@ -236,30 +225,21 @@ namespace GraphCliqueCSharp
                     if (graph.AreAdjacent(currNode, otherNode) == true)
                         ++degreeOfCurrentNode;
                 }
+
+                allowedAddDegree.Add(degreeOfCurrentNode);
                 if (degreeOfCurrentNode > maxDegree)
                     maxDegree = degreeOfCurrentNode;
             }
 
             List<int> candidates = new List<int>();
-            for (int i = 0; i < possibleAdd.Count; ++i)
+            for (int i = 0; i < allowedAdd.Count; ++i)
             {
-                int currNode = possibleAdd[i];
-                int degreeOfCurrentNode = 0;
-                for (int j = 0; j < possibleAdd.Count; ++j)
-                {
-                    int otherNode = possibleAdd[j];
-                    if (graph.AreAdjacent(currNode, otherNode) == true)
-                        ++degreeOfCurrentNode;
-                }
-                if (degreeOfCurrentNode == maxDegree)
-                    candidates.Add(currNode);
+                if (allowedAddDegree[i] == maxDegree)
+                    candidates.Add(possibleAdd[i]);
             }
-            /*
-             * Заметьте, что двойное сканирование можно было бы исключить,
-             * используя дополнительные хранилища данных для отслеживания числа соединений у каждого узла в possibleAdd:
-             * Я мог бы поместить здесь проверку на предмет того, содержит ли список кандидатов равно один узел,
-             * и, если да, возвращать в candidates единственный узел.
-             */
+
+            if (candidates.Count == 1)
+                return candidates[0];
 
             return candidates[random.Next(0, candidates.Count)];
         }
@@ -268,6 +248,8 @@ namespace GraphCliqueCSharp
         {
             if (clique.Count == 1)
                 return clique[0];
+
+            List<int> cliqueCountNotAdjacent = new List<int>(clique.Count);
 
             int maxCount = 0;
             for (int i = 0; i < clique.Count; ++i)
@@ -281,6 +263,7 @@ namespace GraphCliqueCSharp
                             currOneMissingNode) == false)
                         ++countNotAdjacent;
                 }
+                cliqueCountNotAdjacent.Add(countNotAdjacent);
                 if (countNotAdjacent > maxCount)
                     maxCount = countNotAdjacent;
             }
@@ -288,18 +271,12 @@ namespace GraphCliqueCSharp
             List<int> candidates = new List<int>();
             for (int i = 0; i < clique.Count; ++i)
             {
-                int currCliqueNode = clique[i];
-                int countNotAdjacent = 0;
-                for (int j = 0; j < oneMissing.Count; ++j)
-                {
-                    int currOneMissingNode = oneMissing[j];
-                    if (graph.AreAdjacent(currCliqueNode,
-                            currOneMissingNode) == false)
-                        ++countNotAdjacent;
-                }
-                if (countNotAdjacent == maxCount)
-                    candidates.Add(currCliqueNode);
+                if (cliqueCountNotAdjacent[i] == maxCount)
+                    candidates.Add(clique[i]);
             }
+
+            if (candidates.Count == 1)
+                return candidates[0];
 
             return candidates[random.Next(0, candidates.Count)];
         } // GetNodeToDrop
@@ -310,9 +287,10 @@ namespace GraphCliqueCSharp
             List<int> result = new List<int>();
             for (int i = 0; i < graph.NumberNodes; ++i)
             {
-                count = 0;
                 if (graph.NumberNeighbors(i) < clique.Count - 1) continue;
                 if (clique.BinarySearch(i) >= 0) continue;
+
+                count = 0;
                 for (int j = 0; j < clique.Count; ++j)
                 {
                     if (graph.AreAdjacent(i, clique[j]))
@@ -326,27 +304,28 @@ namespace GraphCliqueCSharp
 
         static List<int> SelectAllowedNodes(List<int> listOfNodes, int time, int prohibitPeriod, int[] lastMoved)
         {
-            if (time > lastMoved[currNode] + prohibitPeriod)
-                result.Add(currNode); // разрешен
-            //Узел currNode — один из находящихся в списке possibleAdd.
-            //Логика проверяет, достаточно ли прошло времени с момента последнего использования этого узла,
-            //т. е. закончен ли период запрета.
-            //Если да, узел добавляется в список узлов allowedAdd.
+            List<int> result = new List<int>();
+            for (int i = 0; i < listOfNodes.Count; ++i)
+            {
+                int currNode = listOfNodes[i];
+                if (time > lastMoved[currNode] + prohibitPeriod)
+                    result.Add(currNode); // разрешен
+            }
 
-            throw new NotImplementedException();
+            return result;
         }
 
         static int UpdateProhibitPeriod(MaxCliqueGraph graph, List<int> clique,
-            int bestSize, Hashtable history, int time, int prohibitPeriod,
+            int bestSize, Dictionary<int, CliqueInfo> history, int time, int prohibitPeriod,
             ref int timeProhibitChanged)
         {
             int result = prohibitPeriod;
             CliqueInfo cliqueInfo = new CliqueInfo(clique, time);
 
-            if (history.Contains(cliqueInfo.GetHashCode()))
+            if (history.ContainsKey(cliqueInfo.GetHashCode()))
             {
-                CliqueInfo ci = (CliqueInfo) history[cliqueInfo.GetHashCode()];
-              
+                CliqueInfo ci = history[cliqueInfo.GetHashCode()];
+
                 int intervalSinceLastVisit = time - ci.LastSeen;
                 ci.LastSeen = time;
                 if (intervalSinceLastVisit < 2 * graph.NumberNodes - 1)
@@ -372,6 +351,26 @@ namespace GraphCliqueCSharp
             }
         } // UpdateProhibitTime
 
+        static void ValidateClique(List<int> clique, List<int> possibleAdd, List<int> oneMissing)
+        {
+            HashSet<int> numbers = new HashSet<int>();
+            foreach (var item in clique)
+            {
+                numbers.Add(item);
+            }
+            if (numbers.Count != clique.Count)
+                throw new Exception("There were duplicate nodes in the current clique");
+
+            foreach (var node in clique)
+            {
+                if (possibleAdd.Contains(node))
+                    throw new Exception("Node in the current clique is in the current possibleAdd list");
+                if (oneMissing.Contains(node))
+                    throw new Exception("Node in the current clique is in the current oneMissing list");
+            }
+
+        }
+
         static string ListAsString(List<int> list)
         {
             StringBuilder sb = new StringBuilder();
@@ -389,7 +388,7 @@ namespace GraphCliqueCSharp
             private int lastSeen;
             public CliqueInfo(List<int> clique, int lastSeen)
             {
-                this.clique = new List<int>();
+                this.clique = new List<int>(clique.Count);
                 this.clique.AddRange(clique);
                 this.lastSeen = lastSeen;
             }
