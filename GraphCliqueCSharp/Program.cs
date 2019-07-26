@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,7 +12,8 @@ using System.Threading.Tasks;
  * Клика (clique) неориентированного графа G = (V,E) — это подмножество V С V вершин,
  * каждая пара в котором связана ребром из множества Е.
  * Другими словами, клика — это полный подграф графа G.
- * Размер (size) клики — это количество содержащихся в этом подграфе вершин. 
+ * Размер (size) клики — это количество содержащихся в этом подграфе вершин.
+ * https://msdn.microsoft.com/ru-ru/magazine/hh580741.aspx
  */
 
 namespace GraphCliqueCSharp
@@ -55,12 +57,25 @@ namespace GraphCliqueCSharp
                                   graph.AreAdjacent(5, 8));
                 Console.WriteLine("Number neighbors of node 4 = " +
                                   graph.NumberNeighbors(4));
+
+                WriteFile(ListAsString(maxClique), "output.txt");
+
+                string outputGraphFile = "..\\..\\output.txt";
+                graph.SaveTxtFormatGraph(outputGraphFile);
             }
             catch (Exception ex)
             {
                 Console.WriteLine("Fatal: " + ex.Message);
             }
         } // Main
+
+        private static void WriteFile(string result, string fileName)
+        {
+            using (StreamWriter writer = new StreamWriter(fileName))
+            {
+                writer.WriteLine(result);
+            }
+        }
 
         static List<int> FindMaxClique(MaxCliqueGraph graph, int maxTime, int targetCliqueSize)
         {

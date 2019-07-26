@@ -153,6 +153,34 @@ namespace GraphCliqueCSharp
             return sb.ToString();
         }
 
+        public string ToTxtFile()
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < data.Dim; ++i)
+            {
+                for (int j = 0; j < data.Dim; ++j)
+                {
+                    if (data.GetValue(i, j))
+                    {
+                        sb.Append(i + 1 + " ");
+                        sb.Append(j + 1);
+                        sb.Append(Environment.NewLine);
+                    }
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        public void SaveTxtFormatGraph(string graphFile)
+        {
+            using (StreamWriter writer = new StreamWriter(graphFile))
+            {
+                writer.WriteLine(numberNodes);
+                writer.WriteLine(ToTxtFile());
+            }
+        }
+
         /// <summary>
         /// Проверка файла данных графа до создания экземпляра объекта графа
         /// </summary>
